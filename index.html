@@ -9,7 +9,7 @@
 <link rel="icon" href="./favicon.ico" sizes="any">
 <link rel="icon" type="image/svg+xml" href="./icon.svg">
 <link rel="apple-touch-icon" href="./icon-192.png">
-<title>NEON NAV — v42 / Unlimited Route Explorer</title>
+<title>NEON NAV — v44 / Chromium Map Overlay Fix</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous" onerror="this.onerror=null;this.removeAttribute('integrity');this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'">
 <style>
 :root{color-scheme:dark;--bg:#07101e;--panel:#12213a;--line:#355276;--text:#eff7ff;--muted:#a9bfd9;--mint:#24f0bd;--orange:#ffad45;--blue:#5aaeff;--violet:#aa91ff;--red:#ff6685}
@@ -204,6 +204,38 @@ button:hover{background:#34475c;box-shadow:0 2px 7px #0005}
 .public-license-small{color:#aebfd2;font-size:11px}
 .public-license-copy{padding:8px 3px;text-align:center;color:#9fb3ca;font-size:11px}
 @media(max-width:600px){.public-licenses{padding:0 9px;margin-top:9px}.public-licenses summary{padding:11px 10px}.public-license-body{padding:0 10px 10px}}
+
+/* v44: map errors must never cover the map canvas. Show only a compact,
+   dismissible diagnostic card; the underlying map remains interactive. */
+.mapfailure{
+  inset:auto 14px 14px auto !important;
+  width:min(340px,calc(100% - 28px));
+  max-width:calc(100% - 28px);
+  max-height:32%;
+  min-height:0;
+  overflow:auto;
+  z-index:850;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  justify-content:flex-start;
+  gap:8px;
+  padding:13px;
+  text-align:left;
+  color:#202124 !important;
+  background:rgba(255,255,255,.97) !important;
+  border:1px solid #c7d2df !important;
+  border-radius:12px;
+  box-shadow:0 8px 28px #0005;
+  pointer-events:auto;
+}
+.mapfailure strong{font-size:13px;color:#202124}
+.mapfailure span{max-width:none;color:#5f6368 !important;font-size:12px;line-height:1.6}
+.mapfailure[hidden]{display:none !important}
+.mapfailure-actions{display:flex;align-items:center;gap:8px;width:100%}
+.mapfailure button{min-height:34px;padding:7px 12px;background:#1a73e8 !important;color:#fff !important;border:1px solid #1a73e8 !important;border-radius:7px}
+.mapfailure .mapfailure-close{align-self:flex-end;min-height:28px;padding:3px 8px;background:transparent !important;color:#5f6368 !important;border-color:transparent !important}
+@media(max-width:600px){.mapfailure{inset:auto 10px 64px 10px !important;width:auto;max-width:none;max-height:30%;}}
 </style>
 <script>
 if("serviceWorker" in navigator && (location.protocol === "https:" || (location.hostname === "localhost" || location.hostname === "127.0.0.1"))) {
@@ -212,7 +244,7 @@ if("serviceWorker" in navigator && (location.protocol === "https:" || (location.
 </script>
 </head>
 <body>
-<header><div class="logo">✦</div><div><h1>NEON NAV</h1><div class="sub">ふたつの探索が出会うまで、道路とフェリー航路の枝がにょきにょき伸びる</div></div><button id="sidebarToggle" type="button" aria-expanded="true" aria-controls="sidePanel" title="左パネルを開閉">☰ パネル</button><div class="top-chip">● NEON NAV v42 · WORLD OSM DATA · ADAPTIVE ROUTES · MOBILE/PWA</div></header>
+<header><div class="logo">✦</div><div><h1>NEON NAV</h1><div class="sub">ふたつの探索が出会うまで、道路とフェリー航路の枝がにょきにょき伸びる</div></div><button id="sidebarToggle" type="button" aria-expanded="true" aria-controls="sidePanel" title="左パネルを開閉">☰ パネル</button><div class="top-chip">● NEON NAV v44 · WORLD OSM DATA · ADAPTIVE ROUTES · MOBILE/PWA</div></header>
 <main id="appMain">
 <section class="panel" id="sidePanel">
  <div class="head">場所を検索・設定</div>
@@ -265,7 +297,7 @@ if("serviceWorker" in navigator && (location.protocol === "https:" || (location.
   <div class="routebox" id="routeBox"><div class="routehead">✦ ROUTE DETAILS / ルート詳細</div><div class="route-meta" id="routeMeta"></div><div id="rankedRoutes" class="ranked-routes" aria-live="polite"></div><ol class="directions" id="directions"></ol></div>
  <div class="note">FirefoxのmozPressure／mozInputSource警告はLeaflet 1.xの互換処理による非推奨警告で、道路データ取得エラーとは別です。通常は地図操作を止めません。<br>地図：<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors（ODbL）</a><br>HOT地図：<a href="https://www.hotosm.org/" target="_blank" rel="noopener noreferrer">Humanitarian OpenStreetMap Team</a>（OpenStreetMap France配信）<br>地図ライブラリ：<a href="https://leafletjs.com/" target="_blank" rel="noopener noreferrer">Leaflet 1.9.4（BSD-2-Clause）</a><br>地名検索：Nominatim ／ 道路・フェリー航路：Overpass API（読み取り用）<br>自動取得：出発地・目的地と探索枝の周辺を約0.10度の道路タイルに分けて取得します。大量取得に適さないOSM編集APIは使用せず、読み取り用Overpass APIを低頻度・直列で利用します。取得結果はIndexedDBへキャッシュし、次回以降は保存データを優先して再利用します。PBFファイルの手動追加も可能ですが、通常の自動取得では不要です。<br>データ形式：Overpass APIから道路way・フェリーroute relation・参照ノードをまとめて取得します。フェリーroute relationのメンバーway・座標も同じ応答内で取得し、別の大量取得API呼び出しを避けます。PBFを手動追加した場合のみ、Web Workerでosmixを読み込みます。<br>探索計算：ブラウザ内の双方向Dijkstra法と、複数CPU Workerでの上位経路計算（Workerが使えない場合はメインスレッドの分割処理へ自動フォールバック）。Windows優先モードでは探索を短い時間単位に分割し、枝アニメーションを低fps・低解像度・粒子なしで描画してほかのアプリにCPU時間を譲ります。ブラウザからWindowsのプロセス優先度そのものは変更しません。外部ルート計算APIは使いません。探索枝は地理チャンク単位でIndexedDBへ保存し、表示範囲だけ専用Canvasへ描画します。Canvasは画面サイズのピクセル寸法を明示し、Firefoxでも0×0に縮まないようにしています。画面外の枝は座標・方向・開始時刻・成長時間を保持し、表示時に復元します。<br>自動取得にはインターネット接続とOverpass APIの応答が必要です。公開APIの混雑・利用制限・HTTP 502/503/504・CORS・オフライン時は自動取得できない場合があります。確定ルート表示を分離し、POST本文はCORS事前確認を増やしにくい形式で送信します。その場合はエラーを画面に表示します。ブラウザの保存容量やプライベートモードではキャッシュが保存されない場合があります。フェリーはOSMに登録された route=ferry の航路wayおよびferry route relationを対象にします。運航日・時刻表・欠航・乗船待ち・車両積載条件の最新確認は行いません。一般船舶の自由航行可能海域や海図上の危険物・水深・潮流を扱う航海ナビではありません。所要時間はOSMのmaxspeed（登録がある場合）・道路種別・徒歩速度・フェリーdurationから算出した幅のある推定です。ライブ交通量、信号待ち、リアルな速度変化、通行止め、時間帯規制、ターン制限は完全には反映されないため、到着時刻の保証ではありません。</div>
 </section>
-<div class="mapwrap"><div id="map"></div><div class="mapfailure" id="mapFailure" hidden><strong>地図を読み込めません</strong><span id="mapFailureText">地図タイルの取得に失敗しました。</span><button id="retryMap">再読み込み</button></div><div class="mapbadge" id="mapBadge">NEON NAV v41 · READY · 地点を設定してください</div><div class="mapactions"><button id="mapTheme">地図切替</button><button id="zoomIn" aria-label="拡大">＋</button><button id="zoomOut" aria-label="縮小">－</button><button id="mapHome">⌂ 初期表示</button></div><div class="mapnote" id="mapnote">地図をクリックして地点を配置 · 緑 S / オレンジ G · 画面内 0 枝 / 全保存 0 枝</div></div>
+<div class="mapwrap"><div id="map"></div><div class="mapfailure" id="mapFailure" role="alert" aria-live="polite" hidden><button class="mapfailure-close" id="closeMapFailure" type="button" aria-label="エラー表示を閉じる" onclick="document.getElementById('mapFailure').hidden=true">閉じる ×</button><strong>地図を読み込めません</strong><span id="mapFailureText">地図タイルの取得に失敗しました。</span><div class="mapfailure-actions"><button id="retryMap" type="button" onclick="location.reload()">再読み込み</button></div></div><div class="mapbadge" id="mapBadge">NEON NAV v44 · READY · 地点を設定してください</div><div class="mapactions"><button id="mapTheme">地図切替</button><button id="zoomIn" aria-label="拡大">＋</button><button id="zoomOut" aria-label="縮小">－</button><button id="mapHome">⌂ 初期表示</button></div><div class="mapnote" id="mapnote">地図をクリックして地点を配置 · 緑 S / オレンジ G · 画面内 0 枝 / 全保存 0 枝</div></div>
 </main>
 
 <section class="public-licenses" aria-label="著作権とライセンス">
@@ -281,7 +313,7 @@ if("serviceWorker" in navigator && (location.protocol === "https:" || (location.
    <p class="public-license-small">OSM由来データはODbL 1.0です。Nominatim・Overpass・地図タイルの各公開サーバーには別個の利用ポリシー・容量制限があります。詳細はパッケージ内の THIRD_PARTY_NOTICES.md を確認してください。</p>
   </div>
  </details>
- <div class="public-license-copy">NEON NAV v42 · © 2026 NEON NAV Project · <a href="./THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener noreferrer">第三者ライセンス一覧</a></div>
+ <div class="public-license-copy">NEON NAV v44 · © 2026 NEON NAV Project · <a href="./THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener noreferrer">第三者ライセンス一覧</a></div>
 </section>
 
 <script>
@@ -427,6 +459,7 @@ async function loadLeaflet(){
  }
  function showMapError(msg){$("mapFailure").hidden=false;$("mapFailureText").textContent=msg;badge("MAP UNAVAILABLE");}
  L.control.attribution({prefix:'<a href="https://leafletjs.com/" target="_blank" rel="noopener noreferrer">Leaflet</a> · <a href="https://github.com/Leaflet/Leaflet/blob/v1.9.4/LICENSE" target="_blank" rel="noopener noreferrer">BSD-2-Clause</a>'}).addTo(map);addTiles(0);
+ $("closeMapFailure").onclick=()=>{$("mapFailure").hidden=true;};
  $("retryMap").onclick=()=>addTiles(tileIndex);$("mapTheme").onclick=()=>addTiles(tileIndex===0?1:0);
  $("zoomIn").onclick=()=>map.zoomIn();$("zoomOut").onclick=()=>map.zoomOut();$("mapHome").onclick=()=>map.setView([34.7108,137.7261],13);
 
@@ -2359,9 +2392,9 @@ ${err?.message||String(err)}`);
   }finally{activeRun=previous;}
  }
 
- window.NEON_NAV_DIAGNOSTICS={version:"v41",runSelfTests,runKShortestSelfTest,buildRoadGraph,makeBidirectionalSearch,reconstruct,regionsNearPoint,gridRegionAtPoint,pointInRegion,getGeofabrikCatalog,regionFileMatches,regionOverlapsRouteCorridor,pointWithinRouteBBox,expandRouteCorridorForAlternatives,refreshCacheInfo,listCachedPbf,clearCachedPbf,fetchOverpassTile,fetchRoadTileSource,requestRoadJson,requestOverpassJson,extractRoadElements,hydrateFerryRelations,parseOsmDurationSeconds};
+ window.NEON_NAV_DIAGNOSTICS={version:"v44",runSelfTests,runKShortestSelfTest,buildRoadGraph,makeBidirectionalSearch,reconstruct,regionsNearPoint,gridRegionAtPoint,pointInRegion,getGeofabrikCatalog,regionFileMatches,regionOverlapsRouteCorridor,pointWithinRouteBBox,expandRouteCorridorForAlternatives,refreshCacheInfo,listCachedPbf,clearCachedPbf,fetchOverpassTile,fetchRoadTileSource,requestRoadJson,requestOverpassJson,extractRoadElements,hydrateFerryRelations,parseOsmDurationSeconds};
 
- setPickMode("start");restoreSharedRoute();const resize=()=>map.invalidateSize({pan:false});window.addEventListener("resize",resize,{passive:true});if(window.ResizeObserver){const ro=new ResizeObserver(resize);ro.observe($("map"));}setTimeout(resize,150);setTimeout(resize,650);
+ setPickMode("start");restoreSharedRoute();let resizeQueued=false;const resize=()=>{if(resizeQueued)return;resizeQueued=true;requestAnimationFrame(()=>{resizeQueued=false;map.invalidateSize({pan:false,debounceMoveend:true});});};window.addEventListener("resize",resize,{passive:true});window.addEventListener("pageshow",resize);document.addEventListener("visibilitychange",()=>{if(!document.hidden)resize();});if(window.ResizeObserver){const ro=new ResizeObserver(resize);ro.observe($("map"));}requestAnimationFrame(()=>requestAnimationFrame(resize));setTimeout(resize,150);setTimeout(resize,650);
 })().catch(e=>{document.getElementById("mapFailure").hidden=false;document.getElementById("mapFailureText").textContent=e.message;document.getElementById("mapBadge").textContent="APP INIT ERROR";document.getElementById("status").textContent="起動エラー："+e.stack;});
 </script>
 </body>
